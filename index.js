@@ -15,6 +15,7 @@ const debug = require('debug')('firestore-snippets-node');
 const admin = require('firebase-admin');
 const serviceAccount = require('./serviceacckey.json');
 const { count, error } = require('console');
+const { SSL_OP_SSLEAY_080_CLIENT_DH_BUG } = require('constants');
 
 admin.initializeApp({
 	credential: admin.credential.cert(serviceAccount)
@@ -356,7 +357,18 @@ for(var i=0;i<mdata.length;i++){
   }
   if(noMatch){bdata.push(mdata[i]);}
 }
+for(var i =0;i<bdata.length;i++)
+{
+  if(!bdata[i].mcount)
+  bdata[i].mcount= 0;
+  else if(!bdata[i].bcount)
+  bdata[i].bcount= 0;
 
+  bdata[i].total =  bdata[i].mcount+ bdata[i].bcount;
+}
+bdata.sort((a, b) => {
+  return b.total- a.total;
+});
    Response = {"statuscode":200,"data":bdata};
   }
   catch(err){
