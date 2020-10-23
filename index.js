@@ -15,7 +15,7 @@ const debug = require('debug')('firestore-snippets-node');
 const admin = require('firebase-admin');
 const serviceAccount = require('./serviceacckey.json');
 const { count, error } = require('console');
-const { SSL_OP_SSLEAY_080_CLIENT_DH_BUG } = require('constants');
+
 
 admin.initializeApp({
 	credential: admin.credential.cert(serviceAccount)
@@ -42,8 +42,8 @@ router.post('/login',(req,res)=>{
 router.post('/signup',(req,res)=>{
 
   try{
-
   signup(req.body).then(result =>{
+ 
     res.send(result);
   });
   }
@@ -54,6 +54,8 @@ router.post('/signup',(req,res)=>{
 router.get('/get_book/:id', (req,res) => {
     
     try{
+     
+   
         let userid = req.params.id;
         getbooks(userid).then(result =>{
           res.send(result);
@@ -111,7 +113,6 @@ router.post('/upload_book',(req,res) =>{
   try{
 
    postbookdata(req.body).then(result =>{
-    console.log(result);
     res.send(result);
   });
 
@@ -124,7 +125,7 @@ router.post('/upload_book',(req,res) =>{
 router.post('/upload_movie',(req,res) =>{
   try{
    postmoviedata(req.body).then(result =>{
-    console.log(result);
+
     res.send(result);
   });
 
@@ -214,7 +215,7 @@ router.post('/upload_movie',(req,res) =>{
     var data = [];
     const snapshot = await movieRef.where('userid','==',userid).get();
       if (snapshot.empty) {
-        Response = {"statuscode":400,"message":'No matching documents'};
+        Response = {"statuscode":400,"message":'No matching documents',"date":null};
       }
       else{
       snapshot.forEach((doc) => {
@@ -240,10 +241,16 @@ router.post('/upload_movie',(req,res) =>{
     snapshot.forEach((doc) => {
       data.push(doc.data())
     });
+    data.sort((a, b) => {
+      let d1 = new Date(a.date);
+      let d2 = new Date(b.date);
+      return d2-d1;
+    });
     for(var i=0;i<data.length;i++)
     {
       const name = await getusername(data[i].userid);
       data[i].username = name.data;
+      data[i].date = new Date(data[i].date).toDateString().substring(4, 10);
     }
     Response = {"statuscode":200,"data":data};
   }
@@ -262,7 +269,7 @@ router.post('/upload_movie',(req,res) =>{
     let data = [];
     const snapshot = await userRef.where('userid','==',id).get();
     if (snapshot.empty) {
-      Response = {"statuscode":400,"message":'No matching documents'};
+      Response = {"statuscode":400,"message":'No matching documents',"date":null};
       console.log('No matching documents');
       return;
     }
@@ -289,7 +296,6 @@ router.post('/upload_movie',(req,res) =>{
     let bdata = [];
     let movie_data=[];
     let book_data = [];
-    let count = [];
     let moviemap = new Map();
     let bookmap = new Map();
     const snapshot = await Ref.get();
@@ -332,17 +338,17 @@ router.post('/upload_movie',(req,res) =>{
   for (const [k, v] of moviemap.entries()) {
     
     const name = await getusername(k);
-    mdata.push({"username":name.data,"mcount":v});
+    mdata.push({"Position":0,"Name":name.data,"Movies":v});
   }
   for (const [k, v] of bookmap.entries()) {
     
     const name = await getusername(k);
-    bdata.push({"username":name.data,"bcount":v});
+    bdata.push({"Position":0,"Name":name.data,"Books":v});
   }
   for(var i=0;i<bdata.length;i++){
     for(var j=0;j<mdata.length;j++){
-    if(bdata[i].username == mdata[j].username){
-      bdata[i].mcount = mdata[j].mcount;
+    if(bdata[i].Name == mdata[j].Name){
+      bdata[i].Movies = mdata[j].Movies;
     }
   }
 }
@@ -350,8 +356,8 @@ router.post('/upload_movie',(req,res) =>{
 for(var i=0;i<mdata.length;i++){
     noMatch = true;
     for(var j=0;j<bdata.length;j++){
-    if(mdata[i].username == bdata[j].username){
-      mdata[i].bcount = bdata[j].bcount;
+    if(mdata[i].Name == bdata[j].Name){
+      mdata[i].Books = bdata[j].Books;
       noMatch = false;
     }
   }
@@ -359,16 +365,23 @@ for(var i=0;i<mdata.length;i++){
 }
 for(var i =0;i<bdata.length;i++)
 {
-  if(!bdata[i].mcount)
-  bdata[i].mcount= 0;
-  else if(!bdata[i].bcount)
-  bdata[i].bcount= 0;
+  if(!bdata[i].Movies)
+  bdata[i].Movies= 0;
+  else if(!bdata[i].Books)
+  bdata[i].Books= 0;
 
-  bdata[i].total =  bdata[i].mcount+ bdata[i].bcount;
+  bdata[i].Total =  bdata[i].Movies+ bdata[i].Books;
 }
 bdata.sort((a, b) => {
-  return b.total- a.total;
+  return b.Total- a.Total;
 });
+var Position = 1;
+for (var i = 0; i < bdata.length; i++) {
+  if (i > 0 && bdata[i].Total < bdata[i - 1].Total) {
+    Position++;
+  }
+  bdata[i].Position = Position;
+}
    Response = {"statuscode":200,"data":bdata};
   }
   catch(err){
@@ -380,6 +393,7 @@ bdata.sort((a, b) => {
   async function postbookdata(result)
   {
     try{
+    let date = new Date().toLocaleString();
     var Response;
     const obj = result;
 	  const uploadbookData = {
@@ -388,13 +402,15 @@ bdata.sort((a, b) => {
     genre: obj.genre,
     rating: obj.rating,
     type:'book',
-    userid:obj.userid
+    userid:obj.userid,
+    date:date
     };
     const bookdata={
       name: obj.name,
       author: obj.author,
       genre: obj.genre,
-      userid:obj.userid
+      userid:obj.userid,
+      rating: obj.rating
     };
 
     await Ref.doc().set(uploadbookData).then(()=>{
@@ -418,21 +434,25 @@ bdata.sort((a, b) => {
   async function postmoviedata(result)
   {
     try{
+    let date = new Date().toLocaleString();
     var Response;
     const obj = result;
+  
 	  const uploadmovieData = {
 		name: obj.name,
     director: obj.director, 
     genre: obj.genre,
     rating: obj.rating,
     type:'movie',
-    userid:obj.userid
+    userid:obj.userid,
+    date:date
     };
     const moviedata = {
       name: obj.name,
       director: obj.director, 
       genre: obj.genre,
-      userid:obj.userid
+      userid:obj.userid,
+      rating: obj.rating
     };
      await Ref.doc().set(uploadmovieData).then(()=>{
       Response = {"statuscode":200};
@@ -453,52 +473,7 @@ bdata.sort((a, b) => {
      return Response;
 
   }
-  /*async function quickstartListen(db) {
-    // [START quickstart_listen]
-    const snapshot = await bookRef.get();
-    snapshot.forEach((doc) => {
-      console.log(doc.id, '=>', doc.data());
-    });
-    // [END quickstart_listen]
-  }*/
-/*async function exampleData(db) {
-await bookRef.doc('b1').set({
-  name: '2 states',author: 'Chetan Bhagat', rating : 5
-});
-await bookRef.doc('b2').set({
-    name: 'Harry Pott.
-    er',author: 'JK Rowling', rating : 5
-});
-await bookRef.doc('b3').set({
-    name: 'Halh Girlfriend',author: 'Chetan Bhagat', rating : 4
-});
-await bookRef.doc('b4').set({
-    name: 'Secret Seven',author: 'Chetan Bhagat', rating : 5
-});
 
-}*/
-
-
-/*getDialogue().then(result =>{
-	console.log(result);
-	const obj = result;
-	const quoteData = {
-		quote: obj.quote,
-		author: obj.author
-	};
-	return db.collection('sampleData').doc('K5NJIGtt7cwv9mzrswd2')
-	.set(quoteData).then(() => 
-	console.log('new Dialogue written to database'));
-});
-
-function getDialogue(){
-	return new Promise(function(resolve, reject) {
-	resolve({
-	"quote":"I'm Batman",
-	"author":"Batman"
-	});
-})
-}*/
 app.use('/', router);
 app.listen(process.env.port || 3030);
 
